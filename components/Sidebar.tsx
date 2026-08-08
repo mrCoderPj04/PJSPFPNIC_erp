@@ -77,21 +77,21 @@ export default function Sidebar() {
               href={link.href}
               className={`flex flex-col items-center justify-center shrink-0 min-w-[70px] h-14 rounded-xl transition-all gap-1 border ${
                 isActive
-                  ? 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border-indigo-500/30 text-indigo-400'
-                  : 'border-transparent hover:bg-white/05 text-white/60 hover:text-white'
+                  ? 'bg-sky-500/20 border-sky-400/50 text-sky-300 shadow-[0_0_15px_rgba(14,165,233,0.3)]'
+                  : 'border-transparent text-white/70 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_10px_rgba(0,240,255,0.3)]'
               }`}
             >
               <span>{link.icon}</span>
-              <span className="text-[10px] font-medium leading-none">{link.label}</span>
+              <span className="text-[10px] font-semibold leading-none">{link.label}</span>
             </Link>
           );
         })}
         <button
           onClick={() => logout()}
-          className="flex flex-col items-center justify-center shrink-0 min-w-[70px] h-14 rounded-xl transition-all gap-1 border border-transparent hover:bg-red-500/10 text-red-400/80 hover:text-red-400"
+          className="flex flex-col items-center justify-center shrink-0 min-w-[70px] h-14 rounded-xl transition-all gap-1 border border-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300 hover:shadow-[0_0_15px_rgba(239,68,68,0.5)]"
         >
           <LogOut size={18} />
-          <span className="text-[10px] font-medium leading-none">Sign Out</span>
+          <span className="text-[10px] font-semibold leading-none">Sign Out</span>
         </button>
       </nav>
     </>
