@@ -79,15 +79,13 @@ export default function MeetingsPage() {
         setMeetings(data.meetings || []);
       }
 
-      // Fetch employees for invite select (Admins only)
-      if (user?.role === 'ADMIN') {
-        const empRes = await fetch(`${API}/employees`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (empRes.ok) {
-          const empData = await empRes.json();
-          setEmployees(empData.employees || []);
-        }
+      // Fetch employees for invite select & invitees display
+      const empRes = await fetch(`${API}/employees`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (empRes.ok) {
+        const empData = await empRes.json();
+        setEmployees(empData.employees || []);
       }
     } catch (err) {
       console.error(err);
@@ -121,7 +119,7 @@ export default function MeetingsPage() {
           description: formDescription || undefined,
           startTime: new Date(formStartTime).toISOString(),
           endTime: new Date(formEndTime).toISOString(),
-          participants: selectedParticipants,
+          participantIds: selectedParticipants,
         }),
       });
 

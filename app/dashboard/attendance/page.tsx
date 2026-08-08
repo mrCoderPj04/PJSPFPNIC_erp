@@ -48,6 +48,35 @@ export default function AttendancePage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Working Hours Calculator state
+  const [calcEmpId, setCalcEmpId] = useState('');
+  const [calcTimeframe, setCalcTimeframe] = useState<'day' | 'week' | 'month'>('week');
+  const [calcResult, setCalcResult] = useState<any>(null);
+  const [calcLoading, setCalcLoading] = useState(false);
+  const [calcError, setCalcError] = useState('');
+
+  const handleCalculate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!calcEmpId.trim() || !accessToken) return;
+    setCalcError('');
+    setCalcLoading(true);
+    try {
+      const res = await fetch(`${API}/attendance/calculator?employeeId=${encodeURIComponent(calcEmpId)}&timeframe=${calcTimeframe}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to calculate hours');
+      }
+      setCalcResult(data);
+    } catch (err: any) {
+      setCalcError(err.message || 'Error occurred');
+      setCalcResult(null);
+    } finally {
+      setCalcLoading(false);
+    }
+  };
+
   // Security route protection
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -243,6 +272,124 @@ export default function AttendancePage() {
             )}
           </div>
         </div>
+
+        {/* Admin Employee Working Hours Calculator Card */}
+        {isAdmin && (
+          <div className="glass-card p-6 mb-8 border-purple-500/20 bg-gradient-to-r from-purple-900/10 via-neutral-900/40 to-indigo-900/10">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarDays size={20} className="text-purple-400" />
+              <h3 className="text-lg font-bold text-white">Employee Working Hours Calculator</h3>
+            </div>
+            <p className="text-xs text-white/40 mb-6">
+              Enter Employee ID or select employee to calculate total working hours for Day, Week, or Month.
+            </p>
+
+            <form onSubmit={handleCalculate} className="space-y-4">
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Employee ID / Select Employee</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter Employee ID (e.g. 0001)"
+                      value={calcEmpId}
+                      onChange={(e) => setCalcEmpId(e.target.value)}
+                      className="input-glass flex-1 text-xs"
+                    />
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) setCalcEmpId(e.target.value);
+                      }}
+                      className="input-glass bg-neutral-900 border-white/10 text-xs w-48"
+                    >
+                      <option value="" style={{ backgroundColor: '#0a0a1a', color: '#f8fafc' }}>Quick Select</option>
+                      {employees.map(emp => (
+                        <option key={emp.id} value={emp.employeeId} style={{ backgroundColor: '#0a0a1a', color: '#f8fafc' }}>
+                          {emp.username} (#{emp.employeeId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Timeframe Filter Tabs */}
+                <div className="flex bg-white/05 p-1 rounded-xl border border-white/05 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCalcTimeframe('day')}
+                    className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                      calcTimeframe === 'day' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalcTimeframe('week')}
+                    className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                      calcTimeframe === 'week' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalcTimeframe('month')}
+                    className={`px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+                      calcTimeframe === 'month' ? 'bg-indigo-600 text-white shadow-lg' : 'text-white/40 hover:text-white'
+                    }`}
+                  >
+                    Month
+                  </button>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={calcLoading || !calcEmpId.trim()}
+                  className="btn-primary py-2.5 px-6 text-xs flex items-center justify-center gap-2 shrink-0"
+                >
+                  {calcLoading ? 'Calculating...' : 'Calculate Hours'}
+                </button>
+              </div>
+            </form>
+
+            {calcError && (
+              <div className="flex items-center gap-2 bg-red-500/15 border border-red-500/30 rounded-xl p-3 mt-4 text-red-400 text-xs">
+                <AlertCircle size={15} />
+                {calcError}
+              </div>
+            )}
+
+            {/* Calculated Result Card */}
+            {calcResult && (
+              <div className="mt-6 pt-6 border-t border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4 fade-in-up">
+                <div className="bg-white/05 p-4 rounded-xl border border-white/05">
+                  <span className="text-[10px] text-white/40 uppercase block font-semibold">Employee</span>
+                  <span className="font-bold text-sm text-white block">{calcResult.employee?.username}</span>
+                  <span className="text-[10px] text-indigo-400 font-mono">#{calcResult.employee?.employeeId}</span>
+                </div>
+
+                <div className="bg-white/05 p-4 rounded-xl border border-white/05">
+                  <span className="text-[10px] text-white/40 uppercase block font-semibold">Total Working Hours</span>
+                  <span className="font-extrabold text-2xl gradient-text block">{calcResult.totalHours} hrs</span>
+                  <span className="text-[10px] text-white/30 capitalize">Filtered by {calcResult.timeframe}</span>
+                </div>
+
+                <div className="bg-white/05 p-4 rounded-xl border border-white/05">
+                  <span className="text-[10px] text-white/40 uppercase block font-semibold">Shift Days Logged</span>
+                  <span className="font-bold text-xl text-green-400 block">{calcResult.presentDays} days</span>
+                  <span className="text-[10px] text-white/30">Total attendance records</span>
+                </div>
+
+                <div className="bg-white/05 p-4 rounded-xl border border-white/05">
+                  <span className="text-[10px] text-white/40 uppercase block font-semibold">Late Punch Ins</span>
+                  <span className="font-bold text-xl text-yellow-400 block">{calcResult.lateEntries} days</span>
+                  <span className="text-[10px] text-white/30">Past 9:00 AM</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="glass-card p-6 mb-8">

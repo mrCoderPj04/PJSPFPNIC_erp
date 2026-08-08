@@ -29,6 +29,7 @@ function DashboardContent() {
   const { user, accessToken, isAuthenticated, isLoading } = useAuth();
   const [data, setData] = useState<DashboardStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [employeeWeeklyHours, setEmployeeWeeklyHours] = useState<number>(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -41,17 +42,32 @@ function DashboardContent() {
   }, [isAuthenticated, isLoading, user, router]);
 
   useEffect(() => {
-    if (!isAuthenticated || !accessToken || user?.role !== 'ADMIN') {
-      setStatsLoading(false);
-      return;
+    if (!isAuthenticated || !accessToken) return;
+
+    if (user?.role === 'ADMIN') {
+      fetch(`${API}/dashboard`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((r) => r.json())
+        .then((d) => setData(d))
+        .catch(console.error)
+        .finally(() => setStatsLoading(false));
+    } else {
+      // Calculate employee weekly working hours
+      setStatsLoading(true);
+      fetch(`${API}/attendance`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+        .then((r) => r.ok && r.json())
+        .then((d) => {
+          if (d && d.records) {
+            const sum = (d.records as any[]).reduce((acc, curr) => acc + (curr.totalHours || 0), 0);
+            setEmployeeWeeklyHours(Number(sum.toFixed(1)));
+          }
+        })
+        .catch(console.error)
+        .finally(() => setStatsLoading(false));
     }
-    fetch(`${API}/dashboard`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(console.error)
-      .finally(() => setStatsLoading(false));
   }, [isAuthenticated, accessToken, user]);
 
   if (isLoading) {
@@ -171,14 +187,90 @@ function DashboardContent() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="glass-card p-6 text-center py-16">
-              <Briefcase size={48} className="mx-auto mb-4 text-white/20" />
-              <p className="text-white/30">Your tasks and work summary will appear here.</p>
+          <div className="space-y-6">
+            {/* Employee Profile Details Card */}
+            <div className="glass-card p-6 border-indigo-500/20 bg-gradient-to-r from-indigo-900/10 via-neutral-900/40 to-purple-900/10">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl font-bold text-white shadow-xl overflow-hidden shrink-0 border border-white/10">
+                    {user?.photoUrl ? (
+                      <img src={user.photoUrl} alt={user.username} className="w-full h-full object-cover" />
+                    ) : (
+                      user?.username?.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                      {user?.username}
+                      <span className="badge badge-green text-[10px]">ACTIVE</span>
+                    </h2>
+                    <p className="text-xs text-white/50 mt-0.5">
+                      Employee ID: <span className="font-mono text-indigo-400 font-bold">#{user?.employeeId}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-white/40 mt-2">
+                      <span>💼 {user?.designation || 'Software Engineer'}</span>
+                      <span>•</span>
+                      <span>🏢 {user?.department || 'Engineering'}</span>
+                      <span>•</span>
+                      <span>✉️ {user?.email || `${user?.username}@pjerp.com`}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weekly Working Hours Highlight */}
+                <div className="bg-white/05 p-4 rounded-2xl border border-white/05 min-w-[200px] text-center md:text-right">
+                  <div className="text-xs text-white/40 font-semibold uppercase tracking-wider mb-1">Total Week Hours</div>
+                  <div className="text-3xl font-extrabold gradient-text">
+                    {employeeWeeklyHours} <span className="text-sm font-medium text-white/40">hrs</span>
+                  </div>
+                  <div className="text-[10px] text-green-400 font-medium mt-1">Calculated from Attendance</div>
+                </div>
+              </div>
             </div>
-            <div className="glass-card p-6 text-center py-16">
-              <BarChart2 size={48} className="mx-auto mb-4 text-white/20" />
-              <p className="text-white/30">Your performance analytics will appear here.</p>
+
+            {/* Quick Action shortcuts */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass-card p-6">
+                <div className="flex items-center gap-3 mb-3 text-indigo-400">
+                  <Clock size={20} />
+                  <h3 className="font-bold text-sm text-white">Daily Attendance</h3>
+                </div>
+                <p className="text-xs text-white/40 mb-4">Clock in and track daily working hours.</p>
+                <button
+                  onClick={() => router.push('/dashboard/attendance')}
+                  className="btn-primary py-2 text-xs w-full"
+                >
+                  Go to Attendance
+                </button>
+              </div>
+
+              <div className="glass-card p-6">
+                <div className="flex items-center gap-3 mb-3 text-purple-400">
+                  <CheckSquare size={20} />
+                  <h3 className="font-bold text-sm text-white">My Tasks</h3>
+                </div>
+                <p className="text-xs text-white/40 mb-4">View assigned tasks and progress.</p>
+                <button
+                  onClick={() => router.push('/dashboard/tasks')}
+                  className="btn-primary py-2 text-xs w-full"
+                >
+                  View Tasks
+                </button>
+              </div>
+
+              <div className="glass-card p-6">
+                <div className="flex items-center gap-3 mb-3 text-pink-400">
+                  <Calendar size={20} />
+                  <h3 className="font-bold text-sm text-white">Sync Meetings</h3>
+                </div>
+                <p className="text-xs text-white/40 mb-4">Check scheduled team syncs.</p>
+                <button
+                  onClick={() => router.push('/dashboard/meetings')}
+                  className="btn-primary py-2 text-xs w-full"
+                >
+                  View Meetings
+                </button>
+              </div>
             </div>
           </div>
         )}

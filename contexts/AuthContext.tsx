@@ -8,6 +8,7 @@ interface User {
   employeeId: string;
   username: string;
   role: 'ADMIN' | 'EMPLOYEE';
+  email?: string;
   photoUrl?: string;
   department?: string;
   designation?: string;
@@ -48,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAccessToken(null);
     localStorage.removeItem('refreshToken');
-    router.replace('/login');
+    router.replace('/');
   }, [accessToken, router]);
 
   const refreshAccessToken = useCallback(async () => {

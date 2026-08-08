@@ -54,6 +54,7 @@ export default function EmployeesPage() {
   const [formPhone, setFormPhone] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
   const [formDepartmentId, setFormDepartmentId] = useState('');
+  const [formPhotoUrl, setFormPhotoUrl] = useState('');
   const [formRole, setFormRole] = useState<'EMPLOYEE' | 'ADMIN'>('EMPLOYEE');
 
   // Status / Password states
@@ -132,6 +133,7 @@ export default function EmployeesPage() {
           phone: formPhone || undefined,
           departmentId: formDepartmentId || undefined,
           designation: formDesignation || undefined,
+          photoUrl: formPhotoUrl || undefined,
           role: formRole,
         }),
       });
@@ -154,6 +156,7 @@ export default function EmployeesPage() {
       setFormPhone('');
       setFormDesignation('');
       setFormDepartmentId('');
+      setFormPhotoUrl('');
       setFormRole('EMPLOYEE');
     } catch (err: any) {
       setErrorMessage(err.message || 'Error occurred');
@@ -170,6 +173,7 @@ export default function EmployeesPage() {
     setFormPhone(emp.phone || '');
     setFormDesignation(emp.designation || '');
     setFormDepartmentId(emp.department?.id || '');
+    setFormPhotoUrl(emp.photoUrl || '');
     setFormRole(emp.role);
     setErrorMessage('');
     setSuccessMessage('');
@@ -197,6 +201,7 @@ export default function EmployeesPage() {
           phone: formPhone || undefined,
           departmentId: formDepartmentId || undefined,
           designation: formDesignation || undefined,
+          photoUrl: formPhotoUrl || undefined,
         }),
       });
 
@@ -397,8 +402,12 @@ export default function EmployeesPage() {
                     <tr key={emp.id}>
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shrink-0">
-                            {emp.username.charAt(0).toUpperCase()}
+                          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden">
+                            {emp.photoUrl ? (
+                              <img src={emp.photoUrl} alt={emp.username} className="w-full h-full object-cover" />
+                            ) : (
+                              emp.username.charAt(0).toUpperCase()
+                            )}
                           </div>
                           <div>
                             <div className="font-semibold text-sm">{emp.username}</div>
@@ -604,6 +613,16 @@ export default function EmployeesPage() {
                   </div>
                 </div>
                 <div>
+                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture URL</label>
+                  <input
+                    type="url"
+                    value={formPhotoUrl}
+                    onChange={(e) => setFormPhotoUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/... or avatar URL"
+                    className="input-glass"
+                  />
+                </div>
+                <div>
                   <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">System Role</label>
                   <div className="flex gap-4">
                     <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -731,6 +750,17 @@ export default function EmployeesPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture URL</label>
+                  <input
+                    type="url"
+                    value={formPhotoUrl}
+                    onChange={(e) => setFormPhotoUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/... or avatar URL"
+                    className="input-glass"
+                  />
                 </div>
 
                 <button
