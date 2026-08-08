@@ -66,7 +66,7 @@ export default function EmployeesPage() {
   // Security route protection
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
     if (!isLoading && isAuthenticated) {
       if (user?.role !== 'ADMIN') {

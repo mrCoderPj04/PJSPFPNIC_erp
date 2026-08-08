@@ -59,7 +59,7 @@ export default function MeetingsPage() {
   // Security route protection
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
     if (!isLoading && isAuthenticated && user?.isFirstLogin) {
       router.replace('/change-password');

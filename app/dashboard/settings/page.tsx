@@ -21,7 +21,7 @@ export default function SettingsPage() {
   // Security route protection
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
   }, [isAuthenticated, isLoading, router]);
 

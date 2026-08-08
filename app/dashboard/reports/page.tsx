@@ -16,7 +16,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      router.replace('/');
     }
     if (!isLoading && isAuthenticated && user?.isFirstLogin) {
       router.replace('/change-password');
