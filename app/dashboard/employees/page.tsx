@@ -112,6 +112,20 @@ export default function EmployeesPage() {
     }
   }, [isAuthenticated, accessToken, user, fetchData]);
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Image file size should be less than 5MB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormPhotoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle Add Employee Submit
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -613,14 +627,31 @@ export default function EmployeesPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture URL</label>
-                  <input
-                    type="url"
-                    value={formPhotoUrl}
-                    onChange={(e) => setFormPhotoUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/... or avatar URL"
-                    className="input-glass"
-                  />
+                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture (Upload File or Enter URL)</label>
+                  <div className="flex flex-col md:flex-row gap-3 items-center">
+                    <div className="w-14 h-14 rounded-2xl bg-white/05 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                      {formPhotoUrl ? (
+                        <img src={formPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[10px] text-white/30 text-center">No Photo</span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2 w-full">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="block w-full text-xs text-white/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={formPhotoUrl}
+                        onChange={(e) => setFormPhotoUrl(e.target.value)}
+                        placeholder="Or paste image URL (https://...)"
+                        className="input-glass text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">System Role</label>
@@ -753,14 +784,31 @@ export default function EmployeesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture URL</label>
-                  <input
-                    type="url"
-                    value={formPhotoUrl}
-                    onChange={(e) => setFormPhotoUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/... or avatar URL"
-                    className="input-glass"
-                  />
+                  <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">Profile Picture (Upload File or Enter URL)</label>
+                  <div className="flex flex-col md:flex-row gap-3 items-center">
+                    <div className="w-14 h-14 rounded-2xl bg-white/05 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                      {formPhotoUrl ? (
+                        <img src={formPhotoUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[10px] text-white/30 text-center">No Photo</span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2 w-full">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="block w-full text-xs text-white/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={formPhotoUrl}
+                        onChange={(e) => setFormPhotoUrl(e.target.value)}
+                        placeholder="Or paste image URL (https://...)"
+                        className="input-glass text-xs"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <button

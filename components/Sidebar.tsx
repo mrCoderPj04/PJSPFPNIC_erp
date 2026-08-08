@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 
 const ADMIN_LINKS = [
   { href: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-  { href: '/register', icon: <UserPlus size={18} />, label: 'Register User' },
   { href: '/dashboard/employees', icon: <Users size={18} />, label: 'Employees' },
   { href: '/dashboard/departments', icon: <Building2 size={18} />, label: 'Departments' },
   { href: '/dashboard/tasks', icon: <CheckSquare size={18} />, label: 'Tasks' },
@@ -53,8 +52,12 @@ export default function Sidebar() {
 
         {/* User Badge Info */}
         <div className="flex items-center gap-3 bg-white/05 border border-white/05 p-1.5 pr-3 rounded-full">
-          <div className="w-7 h-7 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-            {user?.username?.charAt(0).toUpperCase()}
+          <div className="w-7 h-7 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden border border-white/10">
+            {user?.photoUrl ? (
+              <img src={user.photoUrl} alt={user.username} className="w-full h-full object-cover" />
+            ) : (
+              user?.username?.charAt(0).toUpperCase()
+            )}
           </div>
           <div className="hidden sm:block text-left leading-tight min-w-0">
             <div className="font-medium text-xs text-white truncate max-w-[80px]">{user?.username}</div>
