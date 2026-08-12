@@ -1,6 +1,8 @@
-# 🚀 PJSOFONIC EMS - Enterprise Workforce Portal
-
-PJSOFONIC EMS is a modern, high-performance Employee Management System portal built with **Next.js 15**, **React 18**, **TypeScript**, and **Tailwind CSS**. Designed with modern glassmorphism aesthetics, real-time WebSockets, custom attendance controls, and branded corporate report exports.
+<div align="center">
+  <img src="public/EMS.png" alt="PJSOFONIC EMS Logo" width="160" style="border-radius: 20px; box-shadow: 0 0 25px rgba(0, 240, 255, 0.4);" />
+  <h1>🚀 PJSOFONIC EMS - Enterprise Workforce Portal</h1>
+  <p><strong>Official Employee Management System & Enterprise Portal</strong></p>
+</div>
 
 ---
 
