@@ -3,20 +3,21 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
+export interface User {
   id: string;
   employeeId: string;
   username: string;
   role: 'ADMIN' | 'EMPLOYEE';
   email?: string;
   photoUrl?: string;
+  salary?: number;
   department?: string;
   designation?: string;
   status: string;
   isFirstLogin: boolean;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: User | null;
   accessToken: string | null;
   isLoading: boolean;
@@ -24,7 +25,9 @@ interface AuthContextType {
   login: (employeeId: string, password: string) => Promise<{ requirePasswordChange: boolean }>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateUserPhoto: (photoUrl: string) => void;
   refreshAccessToken: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -141,8 +144,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(err.error || 'Failed to change password');
     }
 
-    // Update user state
     setUser((prev) => prev ? { ...prev, isFirstLogin: false } : null);
+  }, [accessToken]);
+
+  const updateUserPhoto = useCallback((photoUrl: string) => {
+    setUser((prev) => prev ? { ...prev, photoUrl } : null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API}/auth/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      }
+    } catch { /* ignore */ }
   }, [accessToken]);
 
   return (
@@ -155,7 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         login,
         logout,
         changePassword,
+        updateUserPhoto,
         refreshAccessToken,
+        refreshUser,
       }}
     >
       {children}

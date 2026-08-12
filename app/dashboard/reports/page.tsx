@@ -1,281 +1,597 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/Sidebar';
-import { BarChart3, FileSpreadsheet, FileText, Download, ShieldAlert, FileType } from 'lucide-react';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { BarChart3, Users, Clock, AlertCircle, TrendingUp, Download } from 'lucide-react';
 import { generatePDFReport, generateExcelReport } from '@/lib/reportGenerator';
+import { useSocket } from '@/contexts/SocketContext';
+
+interface AttendanceRow {
+  id: string;
+  username: string;
+  employeeId: string;
+  designation: string;
+  department: string;
+  presentDays: number;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  lateEntries: number;
+  autoPunchOuts: number;
+}
+
+interface EmpOverviewRow {
+  id: string;
+  employeeId: string;
+  username: string;
+  email: string | null;
+  designation: string | null;
+  status: string;
+  createdAt: string;
+  department?: { name: string };
+  _count: { attendance: number };
+}
+
+interface CredentialRow {
+  employeeId: string;
+  username: string;
+  email: string | null;
+  designation: string | null;
+  department: string;
+  tempPassword: string;
+}
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-export default function ReportsPage() {
-  const { accessToken, isAuthenticated, isLoading, user } = useAuth();
+type Tab = 'attendance' | 'employees' | 'credentials';
+
+function ReportsContent() {
+  const { user, accessToken, isAuthenticated, isLoading } = useAuth();
+  const { socket } = useSocket();
   const router = useRouter();
-  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const [tab, setTab] = useState<Tab>('employees');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Attendance
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [attendanceReport, setAttendanceReport] = useState<AttendanceRow[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+
+  // Employees
+  const [empReport, setEmpReport] = useState<EmpOverviewRow[]>([]);
+  const [credentialsReport, setCredentialsReport] = useState<CredentialRow[]>([]);
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+  const [credentialsGenerated, setCredentialsGenerated] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace('/');
-    }
-    if (!isLoading && isAuthenticated && user?.isFirstLogin) {
-      router.replace('/change-password');
-    }
+    if (!isLoading && !isAuthenticated) router.replace('/');
+    if (!isLoading && isAuthenticated && user?.role !== 'ADMIN') router.replace('/dashboard');
   }, [isAuthenticated, isLoading, user, router]);
 
-  const handleExport = async (type: 'attendance' | 'tasks' | 'employees', format: 'pdf' | 'excel') => {
+  const fetchAttendance = useCallback(async () => {
     if (!accessToken) return;
-    const key = `${type}-${format}`;
-    setDownloading(key);
-
+    setLoading(true); setError('');
     try {
-      let title = '';
-      let headers: string[] = [];
-      let rows: (string | number)[][] = [];
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate);
+      const res = await fetch(`${API}/reports/attendance?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setAttendanceReport(data.report || []);
+      setTotalRecords(data.totalRecords || 0);
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [accessToken, startDate, endDate]);
 
-      if (type === 'attendance') {
-        title = 'Attendance Summary Log';
-        headers = ['Employee ID', 'Username', 'Status', 'In Time', 'Out Time', 'Date'];
-        const res = await fetch(`${API}/attendance`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const records = data.records || data.attendance || [];
-          rows = records.map((r: any) => [
-            r.user?.employeeId || r.employeeId || 'EMP-001',
-            r.user?.username || 'Employee',
-            r.status || 'PRESENT',
-            r.checkIn ? new Date(r.checkIn).toLocaleTimeString() : '09:00 AM',
-            r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : '06:00 PM',
-            r.date ? new Date(r.date).toLocaleDateString() : new Date().toLocaleDateString(),
-          ]);
-        }
-        if (rows.length === 0) {
-          rows = [
-            ['EMP-001', 'john_doe', 'PRESENT', '09:02 AM', '06:00 PM', new Date().toLocaleDateString()],
-            ['EMP-002', 'jane_smith', 'PRESENT', '08:55 AM', '06:15 PM', new Date().toLocaleDateString()],
-            ['EMP-003', 'rahul_kumar', 'LATE', '09:45 AM', '06:30 PM', new Date().toLocaleDateString()],
-          ];
-        }
-      } else if (type === 'tasks') {
-        title = 'Task Allocation & Completion Log';
-        headers = ['Task ID', 'Title', 'Assignee', 'Priority', 'Status', 'Due Date'];
-        const res = await fetch(`${API}/tasks`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const tasks = data.tasks || [];
-          rows = tasks.map((t: any) => [
-            t.id?.substring(0, 8) || 'TSK-101',
-            t.title || 'Untitled Task',
-            t.assignee?.username || 'Unassigned',
-            t.priority || 'NORMAL',
-            t.status || 'PENDING',
-            t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A',
-          ]);
-        }
-        if (rows.length === 0) {
-          rows = [
-            ['TSK-101', 'Frontend Authentication UI', 'john_doe', 'HIGH', 'COMPLETED', new Date().toLocaleDateString()],
-            ['TSK-102', 'CockroachDB Database Migration', 'admin', 'URGENT', 'WORKING', new Date().toLocaleDateString()],
-            ['TSK-103', 'API Rate Limiting Integration', 'jane_smith', 'MEDIUM', 'REVIEW', new Date().toLocaleDateString()],
-          ];
-        }
-      } else if (type === 'employees') {
-        title = 'Employee Audit Profiles Register';
-        headers = ['Employee ID', 'Username', 'Email', 'Role', 'Designation', 'Status'];
-        const res = await fetch(`${API}/employees`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const emps = data.employees || data.users || [];
-          rows = emps.map((e: any) => [
-            e.employeeId || 'EMP-001',
-            e.username || 'user',
-            e.email || 'N/A',
-            e.role || 'EMPLOYEE',
-            e.designation || 'Staff',
-            e.status || 'ACTIVE',
-          ]);
-        }
-        if (rows.length === 0) {
-          rows = [
-            ['EMP-001', 'mrcoder04', 'mrcoder04@outlook.com', 'ADMIN', 'Lead Engineer', 'ACTIVE'],
-            ['EMP-002', 'john_doe', 'john@pjsofonic.com', 'EMPLOYEE', 'Software Developer', 'ACTIVE'],
-            ['EMP-003', 'sarah_williams', 'sarah@pjsofonic.com', 'EMPLOYEE', 'Product Manager', 'ACTIVE'],
-          ];
-        }
-      }
+  const fetchEmployees = useCallback(async () => {
+    if (!accessToken) return;
+    setLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/reports/employees`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setEmpReport(data.employees || []);
+    } catch (e: any) { setError(e.message); }
+    finally { setLoading(false); }
+  }, [accessToken]);
 
-      const config = {
-        title,
-        headers,
-        rows,
-        fileName: `PJSOFONIC_${type}_report_${Date.now()}`,
-        generatedBy: user?.username || 'Administrator',
-      };
+  const fetchCredentials = useCallback(async () => {
+    if (!accessToken) return;
+    setCredentialsLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/reports/credentials`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setCredentialsReport((data.employees || []).map((emp: any) => ({
+        employeeId: emp.employeeId,
+        username: emp.username,
+        email: emp.email,
+        designation: emp.designation,
+        department: emp.department?.name || 'Unassigned',
+        tempPassword: '••••••••',
+      })));
+    } catch (e: any) { setError(e.message); }
+    finally { setCredentialsLoading(false); }
+  }, [accessToken]);
 
-      if (format === 'pdf') {
-        await generatePDFReport(config);
-      } else {
-        generateExcelReport(config);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error generating report file.');
-    } finally {
-      setDownloading(null);
+  const generateCredentials = useCallback(async () => {
+    if (!accessToken) return;
+    setCredentialsLoading(true); setError('');
+    try {
+      const res = await fetch(`${API}/reports/credentials/generate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate credentials');
+      setCredentialsReport(data.credentials || []);
+      setCredentialsGenerated(true);
+    } catch (e: any) { setError(e.message); }
+    finally { setCredentialsLoading(false); }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken || user?.role !== 'ADMIN') return;
+    if (tab === 'attendance') fetchAttendance();
+    else if (tab === 'employees') fetchEmployees();
+    else if (tab === 'credentials') fetchCredentials();
+  }, [tab, isAuthenticated, accessToken, user, fetchAttendance, fetchEmployees, fetchCredentials]);
+
+  // Real-time: auto-refresh when employee data or attendance changes
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleEmployeeUpdate = () => {
+      if (tab === 'employees') fetchEmployees();
+      if (tab === 'credentials') fetchCredentials();
+    };
+
+    const handleAttendanceUpdate = () => {
+      if (tab === 'attendance') fetchAttendance();
+    };
+
+    socket.on('employee:update', handleEmployeeUpdate);
+    socket.on('attendance:update', handleAttendanceUpdate);
+
+    return () => {
+      socket.off('employee:update', handleEmployeeUpdate);
+      socket.off('attendance:update', handleAttendanceUpdate);
+    };
+  }, [socket, tab, fetchEmployees, fetchCredentials, fetchAttendance]);
+
+  const exportCSV = () => {
+    let csv = '';
+    if (tab === 'attendance') {
+      csv = 'Employee,ID,Dept,Present Days,Total Hrs,Regular Hrs,OT Hrs,Late Entries,Auto Punch-Outs\n';
+      attendanceReport.forEach(r => {
+        csv += `${r.username},${r.employeeId},${r.department},${r.presentDays},${r.totalHours},${r.regularHours},${r.overtimeHours},${r.lateEntries},${r.autoPunchOuts}\n`;
+      });
+    } else if (tab === 'employees') {
+      csv = 'Employee,ID,Email,Designation,Dept,Status,Joined,Attendance Days\n';
+      empReport.forEach(r => {
+        csv += `${r.username},${r.employeeId},${r.email || ''},${r.designation || ''},${r.department?.name || ''},${r.status},${new Date(r.createdAt).toLocaleDateString()},${r._count.attendance}\n`;
+      });
+    } else {
+      csv = 'Employee,ID,Email,Designation,Dept,Temporary Password\n';
+      credentialsReport.forEach(r => {
+        csv += `${r.username},${r.employeeId},${r.email || ''},${r.designation || ''},${r.department},${r.tempPassword}\n`;
+      });
+    }
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ems_${tab}_report_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = async () => {
+    if (tab === 'attendance') {
+      await generatePDFReport({
+        title: 'Attendance Summary',
+        headers: ['Employee', 'ID', 'Dept', 'Present Days', 'Total Hrs', 'Regular Hrs', 'OT Hrs', 'Late Entries', 'Auto Punch-Outs'],
+        rows: attendanceReport.map(r => [r.username, r.employeeId, r.department, r.presentDays, r.totalHours, r.regularHours, r.overtimeHours, r.lateEntries, r.autoPunchOuts]),
+        fileName: `attendance_report_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
+    } else if (tab === 'employees') {
+      await generatePDFReport({
+        title: 'Employee Overview',
+        headers: ['Employee', 'ID', 'Email', 'Designation', 'Dept', 'Status', 'Joined', 'Attendance Days'],
+        rows: empReport.map(r => [r.username, r.employeeId, r.email || '', r.designation || '', r.department?.name || '', r.status, new Date(r.createdAt).toLocaleDateString(), r._count.attendance]),
+        fileName: `employee_overview_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
+    } else {
+      await generatePDFReport({
+        title: 'Employee Credentials',
+        headers: ['Employee', 'ID', 'Email', 'Designation', 'Dept', 'Temporary Password'],
+        rows: credentialsReport.map(r => [r.username, r.employeeId, r.email || '', r.designation || '', r.department, r.tempPassword]),
+        fileName: `employee_credentials_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <main className="flex-1 pt-24 pb-28 px-6 md:px-8 flex items-center justify-center">
-          <div className="text-white/40 flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Loading reports panel...
-          </div>
-        </main>
-      </div>
-    );
-  }
+  const exportExcel = () => {
+    if (tab === 'attendance') {
+      generateExcelReport({
+        title: 'Attendance Summary',
+        headers: ['Employee', 'ID', 'Dept', 'Present Days', 'Total Hrs', 'Regular Hrs', 'OT Hrs', 'Late Entries', 'Auto Punch-Outs'],
+        rows: attendanceReport.map(r => [r.username, r.employeeId, r.department, r.presentDays, r.totalHours, r.regularHours, r.overtimeHours, r.lateEntries, r.autoPunchOuts]),
+        fileName: `attendance_report_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
+    } else if (tab === 'employees') {
+      generateExcelReport({
+        title: 'Employee Overview',
+        headers: ['Employee', 'ID', 'Email', 'Designation', 'Dept', 'Status', 'Joined', 'Attendance Days'],
+        rows: empReport.map(r => [r.username, r.employeeId, r.email || '', r.designation || '', r.department?.name || '', r.status, new Date(r.createdAt).toLocaleDateString(), r._count.attendance]),
+        fileName: `employee_overview_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
+    } else {
+      generateExcelReport({
+        title: 'Employee Credentials',
+        headers: ['Employee', 'ID', 'Email', 'Designation', 'Dept', 'Temporary Password'],
+        rows: credentialsReport.map(r => [r.username, r.employeeId, r.email || '', r.designation || '', r.department, r.tempPassword]),
+        fileName: `employee_credentials_${new Date().toISOString().slice(0, 10)}`,
+        generatedBy: user?.username,
+      });
+    }
+  };
 
-  const isAdmin = user?.role === 'ADMIN';
+  const refreshReport = () => {
+    if (tab === 'attendance') fetchAttendance();
+    else if (tab === 'employees') fetchEmployees();
+    else if (tab === 'credentials') fetchCredentials();
+  };
+
+  if (isLoading) return (
+    <div className="flex min-h-screen bg-black text-white">
+      <Sidebar />
+      <main className="flex-1 pt-24 pb-28 px-6 md:px-8 flex items-center justify-center">
+        <div className="text-cyan-400 animate-pulse">Loading reports...</div>
+      </main>
+    </div>
+  );
+
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'attendance', label: 'Attendance', icon: <Clock size={16} /> },
+    { key: 'employees',  label: 'Employees',  icon: <Users size={16} /> },
+    { key: 'credentials', label: 'Credentials', icon: <TrendingUp size={16} /> },
+  ];
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-black text-white">
       <Sidebar />
-
-      <main className="flex-1 pt-24 pb-28 px-6 md:px-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 fade-in-up">
+      <main className="flex-1 pt-24 pb-28 px-6 md:px-8 max-w-7xl mx-auto w-full">
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 fade-in-up border-b border-cyan-500/20 pb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">
-              System <span className="gradient-text">Reports</span>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
+              <BarChart3 className="text-cyan-400" />
+              EMS <span className="gradient-text">Reports & Analytics</span>
             </h1>
-            <p className="text-white/40 mt-1 text-sm">Download company datasets, performance charts, and session logs with branded header.</p>
+            <p className="text-white/60 mt-1 text-sm">Attendance summaries and employee analytics.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={refreshReport}
+              className="btn-tertiary py-2 px-5 text-xs font-bold flex items-center gap-2"
+            >
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={exportCSV}
+              className="btn-primary py-2 px-5 text-xs font-bold flex items-center gap-2"
+            >
+              <Download size={16} />
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportPDF}
+              className="btn-secondary py-2 px-5 text-xs font-bold flex items-center gap-2"
+            >
+              <Download size={16} />
+              Export PDF
+            </button>
+            <button
+              type="button"
+              onClick={exportExcel}
+              className="btn-secondary py-2 px-5 text-xs font-bold flex items-center gap-2"
+            >
+              <Download size={16} />
+              Export Excel
+            </button>
           </div>
         </div>
 
-        {!isAdmin ? (
-          <div className="glass-card max-w-xl p-6 border-red-500/20 flex flex-col md:flex-row items-start gap-4">
-            <div className="p-3 rounded-xl bg-red-500/10 text-red-400">
-              <ShieldAlert size={24} />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-red-400 mb-1">Access Restricted</h3>
-              <p className="text-sm text-white/50 leading-relaxed">
-                Only system administrators have permissions to view, extract, or generate database summaries and employee files. Please contact support if this is incorrect.
-              </p>
-            </div>
+        {error && (
+          <div className="flex items-center gap-2 bg-pink-500/15 border border-pink-500/40 rounded-xl p-4 mb-6 text-pink-400 text-sm">
+            <AlertCircle size={16} /> {error}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Card 1: Attendance */}
-            <div className="glass-card p-6 flex flex-col justify-between hover:border-indigo-500/20 transition-all group">
-              <div>
-                <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
-                  <FileSpreadsheet size={24} />
-                </div>
-                <h3 className="text-lg font-bold mb-2">Attendance Summary</h3>
-                <p className="text-xs text-white/40 leading-relaxed mb-6">
-                  Export shift login schedules, worked hours, late entries, and overtime registers for the selected calendar range.
-                </p>
-              </div>
+        )}
 
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleExport('attendance', 'pdf')}
-                  disabled={downloading !== null}
-                  className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500"
-                >
-                  <FileType size={14} />
-                  {downloading === 'attendance-pdf' ? 'Exporting PDF...' : 'Export PDF (Branded)'}
-                </button>
-                <button
-                  onClick={() => handleExport('attendance', 'excel')}
-                  disabled={downloading !== null}
-                  className="w-full py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition flex items-center justify-center gap-2 text-xs font-semibold"
-                >
-                  <Download size={14} />
-                  {downloading === 'attendance-excel' ? 'Exporting Excel...' : 'Export Excel (.xlsx)'}
-                </button>
-              </div>
-            </div>
-
-            {/* Card 2: Tasks */}
-            <div className="glass-card p-6 flex flex-col justify-between hover:border-purple-500/20 transition-all group">
-              <div>
-                <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-purple-500/10 text-purple-400 border border-purple-500/20 group-hover:bg-purple-500/20 transition-all">
-                  <FileText size={24} />
-                </div>
-                <h3 className="text-lg font-bold mb-2">Task Allocation Report</h3>
-                <p className="text-xs text-white/40 leading-relaxed mb-6">
-                  Extract records detailing assigned task count, completed items, pending scrum workloads, and employee performance statistics.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleExport('tasks', 'pdf')}
-                  disabled={downloading !== null}
-                  className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 text-xs font-semibold bg-purple-600 hover:bg-purple-500"
-                >
-                  <FileType size={14} />
-                  {downloading === 'tasks-pdf' ? 'Exporting PDF...' : 'Export PDF (Branded)'}
-                </button>
-                <button
-                  onClick={() => handleExport('tasks', 'excel')}
-                  disabled={downloading !== null}
-                  className="w-full py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition flex items-center justify-center gap-2 text-xs font-semibold"
-                >
-                  <Download size={14} />
-                  {downloading === 'tasks-excel' ? 'Exporting Excel...' : 'Export Excel (.xlsx)'}
-                </button>
-              </div>
-            </div>
-
-            {/* Card 3: Employees */}
-            <div className="glass-card p-6 flex flex-col justify-between hover:border-pink-500/20 transition-all group">
-              <div>
-                <div className="w-12 h-12 rounded-xl mb-4 flex items-center justify-center bg-pink-500/10 text-pink-400 border border-pink-500/20 group-hover:bg-pink-500/20 transition-all">
-                  <BarChart3 size={24} />
-                </div>
-                <h3 className="text-lg font-bold mb-2">Employee Audit Profiles</h3>
-                <p className="text-xs text-white/40 leading-relaxed mb-6">
-                  Generate spreadsheets of all active workforce accounts, system roles, departments, designation details, and logins stats.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={() => handleExport('employees', 'pdf')}
-                  disabled={downloading !== null}
-                  className="btn-primary w-full py-2.5 flex items-center justify-center gap-2 text-xs font-semibold bg-pink-600 hover:bg-pink-500"
-                >
-                  <FileType size={14} />
-                  {downloading === 'employees-pdf' ? 'Exporting PDF...' : 'Export PDF (Branded)'}
-                </button>
-                <button
-                  onClick={() => handleExport('employees', 'excel')}
-                  disabled={downloading !== null}
-                  className="w-full py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 transition flex items-center justify-center gap-2 text-xs font-semibold"
-                >
-                  <Download size={14} />
-                  {downloading === 'employees-excel' ? 'Exporting Excel...' : 'Export Excel (.xlsx)'}
-                </button>
-              </div>
-            </div>
+        {/* Centered Glassmorphic Tab Switcher with Background Blur */}
+        <div className="flex justify-center mb-8">
+          <div className="flex bg-white/10 backdrop-blur-md p-1.5 rounded-2xl border border-cyan-500/30 shadow-[0_0_25px_rgba(0,240,255,0.15)] gap-2">
+            {TABS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-2 px-6 py-2.5 text-xs font-extrabold rounded-xl capitalize transition-all ${
+                  tab === t.key
+                    ? 'bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.4)] backdrop-blur-lg'
+                    : 'text-white/50 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
           </div>
+        </div>
+
+        {/* ── ATTENDANCE TAB ── */}
+        {tab === 'attendance' && (
+          <>
+            {/* Date filter */}
+            <div className="glass-card p-4 mb-6 border-cyan-500/20 flex flex-wrap gap-4 items-end">
+              <div>
+                <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">From</label>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="input-glass bg-black text-white border-cyan-500/20" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">To</label>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="input-glass bg-black text-white border-cyan-500/20" />
+              </div>
+              <button onClick={fetchAttendance} disabled={loading} className="btn-primary py-2.5 px-5 text-xs font-bold">
+                {loading ? 'Loading...' : 'Generate Report'}
+              </button>
+            </div>
+
+            {/* Summary cards */}
+            {attendanceReport.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: 'Total Records', value: totalRecords, color: 'cyan' },
+                  { label: 'Employees', value: attendanceReport.length, color: 'purple' },
+                  { label: 'Total OT Hrs', value: attendanceReport.reduce((s,r)=>s+r.overtimeHours,0).toFixed(1)+' hrs', color: 'pink' },
+                  { label: 'Late Entries', value: attendanceReport.reduce((s,r)=>s+r.lateEntries,0), color: 'yellow' },
+                ].map(c => (
+                  <div key={c.label} className="glass-card p-4 border-cyan-500/20">
+                    <span className="text-[10px] text-white/50 uppercase font-bold block">{c.label}</span>
+                    <span className={`text-2xl font-extrabold block mt-1 text-${c.color}-400`}>{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="glass-card overflow-hidden border-cyan-500/30">
+              <div className="overflow-x-auto">
+                <table className="table-glass">
+                  <thead><tr>
+                    <th>Employee</th>
+                    <th>Dept</th>
+                    <th>Days Present</th>
+                    <th>Total Hrs</th>
+                    <th>Regular (8h)</th>
+                    <th>Overtime</th>
+                    <th>Late</th>
+                    <th>Auto Punch-Out</th>
+                  </tr></thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={8} className="text-center py-10 text-white/30">Loading...</td></tr>
+                    ) : attendanceReport.length === 0 ? (
+                      <tr><td colSpan={8} className="text-center py-10 text-white/30">No data. Apply filters and click Generate Report.</td></tr>
+                    ) : attendanceReport.map(r => (
+                      <tr key={r.id}>
+                        <td>
+                          <div className="font-bold text-sm text-white">{r.username}</div>
+                          <div className="text-[10px] text-cyan-400 font-mono">#{r.employeeId}</div>
+                        </td>
+                        <td className="text-white/70 text-xs">{r.department}</td>
+                        <td className="font-bold text-cyan-300">{r.presentDays}</td>
+                        <td className="font-mono text-white">{r.totalHours} hrs</td>
+                        <td className="font-mono text-cyan-400">{r.regularHours} hrs</td>
+                        <td className="font-mono text-purple-400 font-bold">{r.overtimeHours > 0 ? `+${r.overtimeHours}` : '0'} hrs</td>
+                        <td className="text-yellow-400 font-bold">{r.lateEntries}</td>
+                        <td className="text-pink-400 font-bold">{r.autoPunchOuts}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── EMPLOYEES TAB ── */}
+        {tab === 'employees' && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              <div className="glass-card p-5 border-cyan-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Total Employees</span>
+                <span className="text-2xl font-extrabold text-cyan-400 block mt-1">{empReport.length}</span>
+              </div>
+              <div className="glass-card p-5 border-green-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Active</span>
+                <span className="text-2xl font-extrabold text-green-400 block mt-1">
+                  {empReport.filter(e => e.status === 'ACTIVE').length}
+                </span>
+              </div>
+              <div className="glass-card p-5 border-pink-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Inactive / Locked</span>
+                <span className="text-2xl font-extrabold text-pink-400 block mt-1">
+                  {empReport.filter(e => e.status !== 'ACTIVE').length}
+                </span>
+              </div>
+            </div>
+
+            <div className="glass-card overflow-hidden border-cyan-500/30">
+              <div className="overflow-x-auto">
+                <table className="table-glass">
+                  <thead><tr>
+                    <th>Employee</th>
+                    <th>Email</th>
+                    <th>Designation / Dept</th>
+                    <th>Attendance Days</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                  </tr></thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-white/30">Loading employee report...</td></tr>
+                    ) : empReport.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-white/30">No employees found.</td></tr>
+                    ) : empReport.map(r => (
+                      <tr key={r.id}>
+                        <td>
+                          <div className="font-bold text-sm text-white">{r.username}</div>
+                          <div className="text-[10px] text-cyan-400 font-mono">#{r.employeeId}</div>
+                        </td>
+                        <td className="text-white/60 text-xs">{r.email || '—'}</td>
+                        <td>
+                          <div className="text-xs font-medium text-white">{r.designation || 'Staff'}</div>
+                          <div className="text-[10px] text-white/40">{r.department?.name || 'Unassigned'}</div>
+                        </td>
+                        <td className="font-bold text-cyan-400">{r._count?.attendance ?? 0}</td>
+                        <td>
+                          <span className={`badge ${r.status === 'ACTIVE' ? 'badge-green' : 'badge-red'}`}>{r.status}</span>
+                        </td>
+                        <td className="text-white/50 text-xs">
+                          {new Date(r.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── CREDENTIALS TAB ── */}
+        {tab === 'credentials' && (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="glass-card p-5 border-cyan-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Total Employees</span>
+                <span className="text-2xl font-extrabold text-cyan-400 block mt-1">{credentialsReport.length}</span>
+              </div>
+              <div className="glass-card p-5 border-purple-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Credentials Status</span>
+                <span className={`text-2xl font-extrabold block mt-1 ${credentialsGenerated ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {credentialsGenerated ? 'Generated' : 'Not Generated'}
+                </span>
+              </div>
+              <div className="glass-card p-5 border-green-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Export Formats</span>
+                <span className="text-lg font-extrabold text-green-400 block mt-1">PDF · Excel · CSV</span>
+              </div>
+              <div className="glass-card p-5 border-pink-500/30">
+                <span className="text-[10px] text-white/50 uppercase font-bold block">Security</span>
+                <span className="text-lg font-extrabold text-pink-400 block mt-1">Confidential</span>
+              </div>
+            </div>
+
+            {/* Generate Button with Warning */}
+            <div className="glass-card p-5 mb-6 border-yellow-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-bold text-sm text-yellow-300 flex items-center gap-2">
+                  <AlertCircle size={16} /> Generate New Credentials
+                </h3>
+                <p className="text-[11px] text-white/50 mt-1">This will reset ALL employee passwords and generate new temporary credentials. Employees will need to change their password on next login.</p>
+              </div>
+              <button
+                onClick={() => {
+                  if (window.confirm('⚠️ WARNING: This will reset ALL employee passwords!\n\nNew temporary passwords will be generated for every employee. They will be required to change their password on next login.\n\nAre you sure you want to continue?')) {
+                    generateCredentials();
+                  }
+                }}
+                disabled={credentialsLoading}
+                className="btn-primary py-2.5 px-6 text-xs font-bold whitespace-nowrap flex items-center gap-2 shrink-0"
+              >
+                {credentialsLoading ? 'Generating...' : '🔑 Generate All Credentials'}
+              </button>
+            </div>
+
+            {/* Credentials Table */}
+            <div className="glass-card overflow-hidden border-cyan-500/30">
+              <div className="overflow-x-auto">
+                <table className="table-glass">
+                  <thead><tr>
+                    <th>Employee</th>
+                    <th>Employee ID</th>
+                    <th>Email</th>
+                    <th>Designation</th>
+                    <th>Department</th>
+                    <th>Temporary Password</th>
+                  </tr></thead>
+                  <tbody>
+                    {credentialsLoading ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-white/30">Loading credentials...</td></tr>
+                    ) : credentialsReport.length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-white/30">No employees found.</td></tr>
+                    ) : credentialsReport.map((r, idx) => (
+                      <tr key={idx}>
+                        <td>
+                          <div className="font-bold text-sm text-white">{r.username}</div>
+                        </td>
+                        <td>
+                          <span className="text-cyan-400 font-mono text-xs">#{r.employeeId}</span>
+                        </td>
+                        <td className="text-white/60 text-xs">{r.email || '—'}</td>
+                        <td className="text-white/70 text-xs">{r.designation || 'Staff'}</td>
+                        <td className="text-white/70 text-xs">{r.department}</td>
+                        <td>
+                          <span className={`font-mono text-xs px-2 py-1 rounded-lg ${r.tempPassword === '••••••••' ? 'bg-white/5 text-white/30' : 'bg-green-500/15 text-green-400 border border-green-500/30'}`}>
+                            {r.tempPassword}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {credentialsGenerated && (
+              <div className="mt-4 flex items-center gap-2 bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-green-400 text-xs">
+                <TrendingUp size={16} />
+                Credentials generated successfully! Use the Export buttons above to download in PDF, Excel, or CSV format.
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <ProtectedRoute>
+      <ReportsContent />
+    </ProtectedRoute>
   );
 }

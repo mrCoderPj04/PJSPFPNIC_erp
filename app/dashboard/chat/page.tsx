@@ -4,7 +4,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/Sidebar';
-import { MessageSquare, Send, User, Search, Smile, AlertCircle } from 'lucide-react';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { MessageSquare, Send, Search } from 'lucide-react';
+import { io, Socket } from 'socket.io-client';
 
 interface ChatMessage {
   id: string;
@@ -21,78 +23,107 @@ interface ChatMessage {
   };
 }
 
-interface Employee {
+interface DirectoryUser {
   id: string;
   username: string;
   employeeId: string;
   photoUrl: string | null;
   role: string;
+  status: string;
 }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
 
-export default function ChatPage() {
+function ChatContent() {
   const { accessToken, isAuthenticated, isLoading, user } = useAuth();
   const router = useRouter();
 
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [conversations, setConversations] = useState<any[]>([]);
+  const [directory, setDirectory] = useState<DirectoryUser[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [selectedUser, setSelectedUser] = useState<Employee | null>(null);
-
+  const [selectedUser, setSelectedUser] = useState<DirectoryUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [sendLoading, setSendLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  // Security route protection
+  // Redirect if not authenticated
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.replace('/');
-    }
-    if (!isLoading && isAuthenticated && user?.isFirstLogin) {
-      router.replace('/change-password');
-    }
-  }, [isAuthenticated, isLoading, user, router]);
+    if (!isLoading && !isAuthenticated) router.replace('/');
+  }, [isAuthenticated, isLoading, router]);
 
-  // Load initial conversations & directory
+  // Load staff directory
   const loadDirectory = useCallback(async () => {
     if (!accessToken) return;
     try {
-      // Load all employees to chat with
-      const empRes = await fetch(`${API}/employees`, {
+      const res = await fetch(`${API}/employees/directory`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (empRes.ok) {
-        const empData = await empRes.json();
-        // Exclude current logged in user from list
-        setEmployees((empData.employees || []).filter((e: Employee) => e.id !== user?.id));
-      }
-
-      // Load conversations log
-      const convRes = await fetch(`${API}/chat/conversations`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (convRes.ok) {
-        const convData = await convRes.json();
-        setConversations(convData.conversations || []);
+      if (res.ok) {
+        const data = await res.json();
+        setDirectory(data.employees || []);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setPageLoading(false);
     }
-  }, [accessToken, user]);
+  }, [accessToken]);
+
+  // Connect Socket.IO
+  useEffect(() => {
+    if (!accessToken || !isAuthenticated) return;
+
+    const socket = io(SOCKET_URL, {
+      auth: { token: accessToken },
+      transports: ['websocket', 'polling'],
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => console.log('Socket connected'));
+
+    socket.on('users:online', (users: { userId: string }[]) => {
+      setOnlineUsers(users.map(u => u.userId));
+    });
+
+    socket.on('chat:message', (msg: ChatMessage) => {
+      setMessages(prev => {
+        // Avoid duplicate if we already appended optimistically
+        if (prev.find(m => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    socket.on('chat:typing', (data: { senderId: string; isTyping: boolean }) => {
+      if (data.isTyping) {
+        setTypingUser(data.senderId);
+      } else {
+        setTypingUser(null);
+      }
+    });
+
+    socket.on('employee:update', () => {
+      loadDirectory();
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [accessToken, isAuthenticated, loadDirectory]);
 
   useEffect(() => {
-    if (isAuthenticated && accessToken) {
-      loadDirectory();
-    }
+    if (isAuthenticated && accessToken) loadDirectory();
   }, [isAuthenticated, accessToken, loadDirectory]);
 
-  // Fetch messages in active thread
+  // Fetch message history for selected user
   const fetchMessages = useCallback(async () => {
     if (!accessToken || !selectedUser) return;
     try {
@@ -102,6 +133,8 @@ export default function ChatPage() {
       if (res.ok) {
         const data = await res.json();
         setMessages(data.messages || []);
+        // Mark as read via socket
+        socketRef.current?.emit('chat:read', { senderId: selectedUser.id });
       }
     } catch (err) {
       console.error(err);
@@ -116,24 +149,7 @@ export default function ChatPage() {
     }
   }, [selectedUser, fetchMessages]);
 
-  // Automatic Polling to update thread messages and conversation list every 4 seconds
-  useEffect(() => {
-    if (!accessToken || !selectedUser) return;
-    const interval = setInterval(() => {
-      fetchMessages();
-      // Also silently reload conversations in background
-      fetch(`${API}/chat/conversations`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-        .then(res => res.ok && res.json())
-        .then(data => data && setConversations(data.conversations || []))
-        .catch(err => console.error(err));
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [accessToken, selectedUser, fetchMessages]);
-
-  // Scroll to bottom of message thread
+  // Auto scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -143,181 +159,236 @@ export default function ChatPage() {
     if (!messageInput.trim() || !selectedUser || sendLoading) return;
     setSendLoading(true);
 
-    try {
-      const res = await fetch(`${API}/chat/messages`, {
+    const content = messageInput.trim();
+    setMessageInput('');
+
+    // Send via Socket.IO for real-time delivery
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('chat:send', {
+        receiverId: selectedUser.id,
+        content,
+      });
+
+      // Create notification for receiver via REST
+      fetch(`${API}/notifications`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
-          receiverId: selectedUser.id,
-          content: messageInput,
+          userId: selectedUser.id,
+          title: `New Message from ${user?.role === 'ADMIN' ? 'PJSOFONIC Admin' : user?.username}`,
+          message: content.length > 60 ? content.slice(0, 60) + '...' : content,
+          type: 'MESSAGE',
         }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setMessages((prev) => [...prev, data.message]);
-        setMessageInput('');
-        
-        // Refresh conversations list to update latest message status
-        const convRes = await fetch(`${API}/chat/conversations`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
+      }).catch(console.error);
+    } else {
+      // Fallback to REST if socket not connected
+      try {
+        const res = await fetch(`${API}/chat/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ receiverId: selectedUser.id, content }),
         });
-        if (convRes.ok) {
-          const convData = await convRes.json();
-          setConversations(convData.conversations || []);
+        if (res.ok) {
+          const data = await res.json();
+          setMessages(prev => [...prev, data.message]);
         }
+      } catch (err) {
+        console.error(err);
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSendLoading(false);
+    }
+
+    setSendLoading(false);
+  };
+
+  const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setMessageInput(e.target.value);
+    if (selectedUser && socketRef.current) {
+      socketRef.current.emit('chat:typing', { receiverId: selectedUser.id, isTyping: true });
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
+      typingTimeout.current = setTimeout(() => {
+        socketRef.current?.emit('chat:typing', { receiverId: selectedUser.id, isTyping: false });
+      }, 1500);
     }
   };
 
-  const filteredEmployees = employees.filter(emp =>
-    emp.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredDirectory = directory.filter(u =>
+    u.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.employeeId.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Group: admins first
+  const sorted = [
+    ...filteredDirectory.filter(u => u.role === 'ADMIN'),
+    ...filteredDirectory.filter(u => u.role !== 'ADMIN'),
+  ];
 
   if (isLoading || pageLoading) {
     return (
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen bg-black text-white">
         <Sidebar />
-        <main className="flex-1 pt-24 pb-28 px-6 md:px-8 flex items-center justify-center">
-          <div className="text-white/40 flex items-center gap-2">
-            <svg className="animate-spin h-5 w-5 text-indigo-400" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Loading portal chat...
-          </div>
+        <main className="flex-1 pt-24 pb-28 px-6 flex items-center justify-center">
+          <div className="text-cyan-400 animate-pulse">Loading messaging interface...</div>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-black text-white">
       <Sidebar />
-
-      <main className="flex-1 pt-24 pb-28 px-6 md:px-8 flex flex-col h-screen max-h-screen overflow-hidden">
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold">
-            Workspace <span className="gradient-text">Chat</span>
+      <main className="flex-1 pt-24 pb-28 px-4 md:px-8 flex flex-col h-screen max-h-screen overflow-hidden max-w-7xl mx-auto w-full">
+        <div className="mb-3">
+          <h1 className="text-2xl font-extrabold tracking-tight">
+            EMS <span className="gradient-text">Real-time Messaging</span>
           </h1>
-          <p className="text-white/40 text-xs">Direct private messages with team members.</p>
+          <p className="text-white/50 text-xs">Chat with admin, colleagues, and all staff in real-time.</p>
         </div>
 
-        {/* Dual pane section */}
-        <div className="flex-1 flex bg-white/03 border border-white/05 rounded-2xl overflow-hidden mb-6 h-[80%] max-h-[80%]">
-          
-          {/* Left panel: list of contacts & active chats */}
-          <div className="w-[320px] border-r border-white/05 flex flex-col bg-white/01">
-            <div className="p-4 border-b border-white/05">
-              <div className="bg-white/05 rounded-xl px-3 py-2 flex items-center gap-2 border border-white/05">
-                <Search size={16} className="text-white/30" />
+        <div className="flex-1 flex bg-black border border-cyan-500/30 rounded-2xl overflow-hidden mb-6 min-h-0">
+          {/* Left: Staff Directory */}
+          <div className="w-[280px] border-r border-cyan-500/20 flex flex-col bg-black shrink-0">
+            <div className="p-3 border-b border-cyan-500/20">
+              <div className="bg-white/5 rounded-xl px-3 py-2 flex items-center gap-2 border border-cyan-500/30">
+                <Search size={14} className="text-cyan-400 shrink-0" />
                 <input
                   type="text"
-                  placeholder="Search teammate..."
+                  placeholder="Search staff..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={e => setSearchTerm(e.target.value)}
                   className="bg-transparent border-none text-white outline-none w-full text-xs"
                 />
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              <span className="text-[10px] uppercase font-bold text-white/30 px-3 tracking-wider block my-2">Teammates</span>
-              {filteredEmployees.map((emp) => (
-                <button
-                  key={emp.id}
-                  onClick={() => setSelectedUser(emp)}
-                  className={`w-full text-left p-3 rounded-xl flex items-center gap-3 transition-colors ${
-                    selectedUser?.id === emp.id
-                      ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30'
-                      : 'hover:bg-white/05 border border-transparent'
-                  }`}
-                >
-                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/70 font-semibold border border-white/05">
-                    {emp.photoUrl ? (
-                      <img src={emp.photoUrl} alt={emp.username} className="w-full h-full rounded-full object-cover" />
-                    ) : (
-                      <User size={16} />
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-xs text-white">{emp.username}</h4>
-                    <p className="text-[10px] text-white/40">#{emp.employeeId} • {emp.role}</p>
-                  </div>
-                </button>
-              ))}
-              {filteredEmployees.length === 0 && (
-                <div className="text-center py-6 text-xs text-white/20">
-                  No teammates found.
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              <span className="text-[10px] uppercase font-bold text-cyan-400 px-3 tracking-wider block my-2">
+                Staff Directory ({sorted.length})
+              </span>
+              {sorted.map(u => {
+                const isOnline = onlineUsers.includes(u.id);
+                const displayUsername = u.role === 'ADMIN' ? 'PJSOFONIC' : u.username;
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => setSelectedUser(u)}
+                    className={`w-full text-left p-2.5 rounded-xl flex items-center gap-3 transition-all ${
+                      selectedUser?.id === u.id
+                        ? 'bg-cyan-500/20 border border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                        : 'hover:bg-white/5 border border-transparent'
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold overflow-hidden">
+                        {u.photoUrl ? (
+                          <img src={u.photoUrl} alt={displayUsername} className="w-full h-full object-cover" />
+                        ) : (
+                          displayUsername.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${isOnline ? 'bg-green-400 shadow-[0_0_6px_#39ff14]' : 'bg-white/20'}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-xs text-white truncate">{displayUsername}</div>
+                      <div className="text-[10px] text-cyan-400/70">
+                        {u.role === 'ADMIN' ? '👑 Admin' : `#${u.employeeId}`}
+                        {' · '}
+                        <span className={isOnline ? 'text-green-400' : 'text-white/30'}>{isOnline ? 'Online' : 'Offline'}</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Right panel: Active chat window */}
-          <div className="flex-1 flex flex-col justify-between">
+          {/* Right: Chat Window */}
+          <div className="flex-1 flex flex-col justify-between bg-black min-w-0">
             {selectedUser ? (
               <>
-                {/* Active contact header bar */}
-                <div className="p-4 border-b border-white/05 flex items-center justify-between bg-white/01">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold border border-indigo-500/30">
+                {/* Chat Header */}
+                <div className="p-4 border-b border-cyan-500/20 flex items-center gap-3 bg-white/5">
+                  <div className="relative">
+                    <div className="w-9 h-9 rounded-full bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-300 font-bold overflow-hidden">
                       {selectedUser.photoUrl ? (
-                        <img src={selectedUser.photoUrl} alt={selectedUser.username} className="w-full h-full rounded-full object-cover" />
+                        <img src={selectedUser.photoUrl} alt={selectedUser.username} className="w-full h-full object-cover" />
                       ) : (
-                        <User size={16} />
+                        (selectedUser.role === 'ADMIN' ? 'PJSOFONIC' : selectedUser.username).charAt(0).toUpperCase()
                       )}
                     </div>
-                    <div>
-                      <h4 className="font-bold text-xs text-white">{selectedUser.username}</h4>
-                      <span className="text-[10px] text-indigo-400 font-semibold uppercase">{selectedUser.role}</span>
-                    </div>
+                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-black ${onlineUsers.includes(selectedUser.id) ? 'bg-green-400' : 'bg-white/20'}`} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-white">
+                      {selectedUser.role === 'ADMIN' ? 'PJSOFONIC (Admin)' : selectedUser.username}
+                    </h4>
+                    <span className="text-[10px] text-cyan-400">
+                      {typingUser === selectedUser.id ? '✍️ typing...' : onlineUsers.includes(selectedUser.id) ? '🟢 Online' : '⚫ Offline'}
+                    </span>
                   </div>
                 </div>
 
-                {/* Messages feed */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white/01">
-                  {messages.map((msg) => {
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-black">
+                  {messages.map(msg => {
                     const isOwn = msg.senderId === user?.id;
+                    const senderName = msg.sender?.id && msg.sender.id !== user?.id
+                      ? (directory.find(d => d.id === msg.sender.id)?.role === 'ADMIN' ? 'PJSOFONIC' : msg.sender.username)
+                      : (user?.role === 'ADMIN' ? 'PJSOFONIC' : user?.username || 'You');
                     return (
                       <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[70%] p-3 rounded-2xl ${
+                        {!isOwn && (
+                          <div className="w-7 h-7 rounded-full bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 font-bold text-xs shrink-0 mr-2 overflow-hidden">
+                            {msg.sender?.photoUrl
+                              ? <img src={msg.sender.photoUrl} className="w-full h-full object-cover" alt="" />
+                              : senderName.charAt(0).toUpperCase()
+                            }
+                          </div>
+                        )}
+                        <div className={`max-w-[72%] px-4 py-2.5 rounded-2xl ${
                           isOwn
-                            ? 'bg-indigo-600 text-white rounded-tr-none'
-                            : 'bg-white/05 text-white/90 border border-white/05 rounded-tl-none'
+                            ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-semibold rounded-tr-none shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                            : 'bg-white/10 text-white border border-cyan-500/30 rounded-tl-none'
                         }`}>
-                          <p className="text-xs break-all leading-normal">{msg.content}</p>
-                          <span className="text-[9px] text-white/40 block mt-1 text-right">
+                          {!isOwn && (
+                            <div className="text-[9px] font-bold text-cyan-300 mb-1 uppercase tracking-wider">{senderName}</div>
+                          )}
+                          <p className="text-xs break-words leading-relaxed">{msg.content}</p>
+                          <span className={`text-[9px] block mt-1 text-right ${isOwn ? 'text-black/60' : 'text-white/40'}`}>
                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
                     );
                   })}
+                  {messages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-white/30 text-xs pt-20">
+                      <MessageSquare size={32} className="mb-2 text-cyan-500/20" />
+                      No messages yet. Start the conversation!
+                    </div>
+                  )}
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Message input bar */}
-                <form onSubmit={handleSendMessage} className="p-4 border-t border-white/05 bg-white/02 flex items-center gap-2">
+                {/* Input */}
+                <form onSubmit={handleSendMessage} className="p-3 border-t border-cyan-500/20 bg-black flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder={`Type message to ${selectedUser.username}...`}
+                    placeholder={`Message ${selectedUser.role === 'ADMIN' ? 'PJSOFONIC' : selectedUser.username}...`}
                     value={messageInput}
-                    onChange={(e) => setMessageInput(e.target.value)}
-                    className="flex-1 input-glass"
+                    onChange={handleTyping}
+                    className="flex-1 input-glass text-sm"
+                    autoComplete="off"
                   />
                   <button
                     type="submit"
                     disabled={!messageInput.trim() || sendLoading}
-                    className="p-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+                    className="btn-primary py-3 px-4 text-xs font-bold flex items-center gap-2 shrink-0"
                   >
                     <Send size={16} />
                   </button>
@@ -325,10 +396,10 @@ export default function ChatPage() {
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-white/30">
-                <MessageSquare size={48} className="text-indigo-400/20 mb-3" />
-                <h3 className="font-bold text-sm text-white/50">No chat selected</h3>
-                <p className="text-xs text-white/30 max-w-[240px] mt-1">
-                  Choose a teammate from the left sidebar directory to view credentials and start chatting.
+                <MessageSquare size={48} className="text-cyan-400/30 mb-4" />
+                <h3 className="font-bold text-base text-white">Select a contact</h3>
+                <p className="text-xs text-white/40 max-w-[200px] mt-1">
+                  Choose any staff member from the directory to start chatting.
                 </p>
               </div>
             )}
@@ -336,5 +407,13 @@ export default function ChatPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <ProtectedRoute>
+      <ChatContent />
+    </ProtectedRoute>
   );
 }

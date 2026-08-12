@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Zap, LogIn, AlertCircle, Lock, Hash, ShieldAlert, UserCheck } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, Lock, Hash, ShieldAlert, UserCheck } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
@@ -35,28 +35,27 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen hero-bg grid-bg flex items-center justify-center px-4">
+    <div className="min-h-screen hero-bg grid-bg flex items-center justify-center px-4 bg-black">
       {/* Background orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'var(--gradient-main)' }} />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: 'hsl(260,75%,60%)' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full opacity-10 blur-3xl" style={{ background: 'hsl(190,75%,55%)' }} />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full opacity-20 blur-3xl" style={{ background: '#bc13fe' }} />
       </div>
 
       <div className="w-full max-w-md z-10 fade-in-up">
-        {/* Logo */}
+        {/* Logo & Branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-3 shadow-2xl p-1 bg-white/05 border border-white/10 overflow-hidden backdrop-blur-md">
-            <img src="/logo.png" alt="PJSOFONIC ERP Logo" className="w-full h-full object-cover rounded-xl" />
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl mb-3 shadow-[0_0_25px_rgba(0,240,255,0.4)] p-1 bg-black border border-cyan-500/40 overflow-hidden">
+            <img src="/EMS.png" alt="PJSOFONIC EMS Logo" className="w-full h-full object-cover rounded-xl" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">
-            <span className="gradient-text">PJSOFONIC</span> ERP
+            <span className="gradient-text">PJSOFONIC</span> EMS
           </h1>
-          <p className="text-white/40 mt-1 text-sm font-medium">Enterprise Resource Planning Portal</p>
+          <p className="text-cyan-400/60 mt-1 text-sm font-medium">Employee Management System</p>
         </div>
 
         {/* Portal Type Tab Switcher */}
-        <div className="flex bg-white/05 p-1 rounded-xl mb-6 border border-white/05">
+        <div className="flex bg-white/05 p-1 rounded-xl mb-6 border border-cyan-500/20">
           <button
             type="button"
             onClick={() => {
@@ -65,7 +64,7 @@ export default function LoginPage() {
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
               activeTab === 'EMPLOYEE'
-                ? 'bg-white/10 text-white shadow-lg'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.4)]'
                 : 'text-white/40 hover:text-white/70'
             }`}
           >
@@ -80,7 +79,7 @@ export default function LoginPage() {
             }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
               activeTab === 'ADMIN'
-                ? 'bg-red-500/10 text-red-400 border border-red-500/10 shadow-lg'
+                ? 'bg-pink-500/20 text-pink-400 border border-pink-500/40 shadow-[0_0_15px_rgba(255,0,127,0.4)]'
                 : 'text-white/40 hover:text-white/70'
             }`}
           >
@@ -90,18 +89,18 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="glass-card p-8">
+        <div className="glass-card p-8 border border-cyan-500/30">
           <h2 className="text-xl font-semibold mb-1">
             {activeTab === 'EMPLOYEE' ? 'Employee Workspace' : 'System Administration'}
           </h2>
-          <p className="text-white/40 text-sm mb-8">
+          <p className="text-white/50 text-sm mb-8">
             {activeTab === 'EMPLOYEE'
-              ? 'Sign in with your Employee ID to access your tasks, attendance, and chats.'
-              : 'Sign in with your Administrator credentials to manage operations and systems.'}
+              ? 'Sign in with your Employee ID to access your dashboard, shift tracking, and messages.'
+              : 'Sign in with your Administrator credentials to manage employees, attendance, and salaries.'}
           </p>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-500/15 border border-red-500/30 rounded-xl p-4 mb-6 text-red-400 text-sm">
+            <div className="flex items-center gap-2 bg-pink-500/15 border border-pink-500/40 rounded-xl p-4 mb-6 text-pink-400 text-sm">
               <AlertCircle size={16} className="shrink-0" />
               {error}
             </div>
@@ -110,11 +109,11 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Employee ID */}
             <div>
-              <label htmlFor="employeeId" className="block text-sm font-medium text-white/60 mb-2">
+              <label htmlFor="employeeId" className="block text-sm font-medium text-white/70 mb-2">
                 {activeTab === 'EMPLOYEE' ? 'Employee ID' : 'Administrator ID'}
               </label>
               <div className="relative">
-                <Hash size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <Hash size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400/60" />
                 <input
                   id="employeeId"
                   type="text"
@@ -131,11 +130,11 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-white/60 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-white/70 mb-2">
                 Password
               </label>
               <div className="relative">
-                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-cyan-400/60" />
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
@@ -149,7 +148,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 transition-colors"
                   aria-label="Toggle password visibility"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -161,11 +160,7 @@ export default function LoginPage() {
               type="submit"
               id="login-submit"
               disabled={isLoading}
-              className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all duration-300 ${
-                activeTab === 'ADMIN'
-                  ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-500/25 shadow-lg'
-                  : 'btn-primary'
-              }`}
+              className="btn-primary w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold"
             >
               {isLoading ? (
                 <>
@@ -178,19 +173,17 @@ export default function LoginPage() {
               ) : (
                 <>
                   <LogIn size={16} />
-                  Sign In
+                  Sign In to EMS
                 </>
               )}
             </button>
           </form>
-
-
         </div>
 
         {/* Security badge */}
-        <div className="flex items-center justify-center gap-2 mt-6 text-white/20 text-xs">
+        <div className="flex items-center justify-center gap-2 mt-6 text-white/30 text-xs">
           <Lock size={12} />
-          Secured with JWT Authentication & End-to-End Encryption
+          PJSOFONIC EMS Secured • End-to-End Encryption
         </div>
       </div>
     </div>
