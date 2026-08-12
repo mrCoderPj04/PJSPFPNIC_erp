@@ -34,7 +34,7 @@ export default function LoginPage() {
       <div className="max-w-md w-full space-y-8 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl backdrop-blur-md">
         <div>
           <h2 className="mt-2 text-center text-3xl font-extrabold text-white">
-            Sign In to PJERP
+            Sign In to PJSOFONIC EMS
           </h2>
           <p className="mt-2 text-center text-sm text-slate-400">
             Access your enterprise dashboard

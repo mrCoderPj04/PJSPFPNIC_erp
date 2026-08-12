@@ -60,7 +60,7 @@ export default function ChangePasswordPage() {
           <h1 className="text-2xl font-bold">Change Your Password</h1>
           <p className="text-white/40 text-sm mt-1">
             {user?.isFirstLogin
-              ? 'Set a new password to get started with PJERP'
+              ? 'Set a new password to get started with PJEMS'
               : 'Update your account password'}
           </p>
         </div>
