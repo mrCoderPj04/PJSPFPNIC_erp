@@ -1,70 +1,72 @@
-🚀 PJSOFONIC ERP
+# 🚀 PJSOFONIC EMS - Enterprise Workforce Portal
 
-PJSOFONIC ERP is a modern, enterprise-grade Resource Planning Portal built with Next.js 15, React 18, TypeScript, and Tailwind CSS. It provides comprehensive workforce management, role-based access control, real-time communications, attendance tracking, task management, and branded report exports.
-
----
-
-✨ Features
-
-· 🔐 Authentication & Authorization: JWT token-based login, register, password change, and session persistence (AuthContext & axios.config).
-· 🛡️ Role-Based Access Control: Separate Employee workspace and Administrator control panels (ProtectedRoute).
-· 📊 Interactive Dashboard: Real-time stats, task summary, department metrics, and quick action widgets.
-· 👥 Workforce Management: Employee directory, status tracking, and department assignments.
-· 📋 Task Management: Assignment, priority levels, status updates, and tracking.
-· ⏱️ Attendance & Timesheets: Daily check-in/check-out logs and attendance history.
-· 💬 Real-time Chat & Meetings: Socket.io integrated communication channels and meeting scheduling.
-· 📄 Branded Report Exports:
-  · PDF Export: Built with jspdf & jspdf-autotable featuring official PJSOFONIC corporate logo header, metadata, and page numbers.
-  · Excel Export: Built with xlsx for structured dataset extraction.
+PJSOFONIC EMS is a modern, high-performance Employee Management System portal built with **Next.js 15**, **React 18**, **TypeScript**, and **Tailwind CSS**. Designed with modern glassmorphism aesthetics, real-time WebSockets, custom attendance controls, and branded corporate report exports.
 
 ---
 
-🛠️ Tech Stack
+## ✨ Key Features
 
-· Framework: Next.js 15 (App Router)
-· Library: React 18 & TypeScript
-· Styling: Tailwind CSS & Glassmorphic UI Design System
-· HTTP Client: Axios (with Request/Response Interceptors)
-· Icons & Motion: Lucide React & Framer Motion
-· Document Generation: jspdf, jspdf-autotable, xlsx
+- **🔐 Flexible Sign-In**: Supports sign-in via **Employee ID**, **Username**, or **Email** with automatic first-login password update prompt.
+- **🛡️ Role-Based Workspaces**: Separate interfaces for **Employees** (Shift tracking, Messaging, Tasks) and **Administrators** (Staff directory, Custom Punch, Reports, System Settings).
+- **📋 Employee Credentials Modal**: Displays generated Employee ID and temporary password immediately after staff creation or password reset with a 1-click **Copy Credentials** button.
+- **📄 Employee ID Download & Reports Section**:
+  - Located under `/dashboard/reports` under the **Employee Credentials** tab.
+  - Centered glassmorphic tab container with backdrop blur styling.
+  - Branded PDF exports featuring official **PJSOFONIC EMS** headers, metadata, and page numbers (`jspdf`, `jspdf-autotable`).
+  - Excel (`.xlsx`) & CSV export for employee credentials and attendance datasets.
+- **⏱️ Attendance Override & Custom Punch Time**:
+  - Force Punch-In & Punch-Out console for Admins.
+  - Date-time picker for entering custom punch-in/out timestamps.
+  - Edit Attendance Time modal for updating existing login/logout records with automatic shift and overtime calculation.
+- **⚡ Real-Time WebSockets**:
+  - Shared `SocketProvider` context (`contexts/SocketContext.tsx`).
+  - Real-time updates on staff creation (`employee:update`), attendance logs (`attendance:update`), and live notifications (`notification:new`).
+- **🔔 Live Notification Center**: Dedicated notifications feed (`/dashboard/notifications`) for viewing system announcements and shift updates.
+- **💬 Staff Messaging & Meetings**: Live team chat and meeting scheduler for seamless internal communication.
 
 ---
 
-⚙️ Environment Variables
+## 🛠️ Tech Stack
 
-Create a .env.local file in the frontend root directory:
+- **Framework**: Next.js 15 (App Router)
+- **Library**: React 18 & TypeScript
+- **Styling**: Tailwind CSS & Glassmorphism UI System
+- **Real-Time Client**: Socket.IO Client v4.7
+- **HTTP Client**: Axios (with Auth Interceptors)
+- **Icons & UI**: Lucide React
+- **Document Generators**: `jspdf`, `jspdf-autotable`, `xlsx`
+
+---
+
+## ⚙️ Environment Variables
+
+Create a `.env.local` file in the `frontend/` root directory:
 
 ```env
-NEXT_PUBLIC_API_URL=https://erp-backend-1-02lc.onrender.com/api
-NEXT_PUBLIC_SOCKET_URL=https://erp-backend-1-02lc.onrender.com
-VITE_API_URL=https://erp-backend-1-02lc.onrender.com/api
+NEXT_PUBLIC_API_URL=http://localhost:5000/api
+NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 ```
 
 ---
 
-🚀 Getting Started
+## 🚀 Getting Started
 
-1. Installation
-
-Install dependencies:
+### 1. Installation
 
 ```bash
+cd frontend
 npm install
 ```
 
-2. Development Server
-
-Run the development server:
+### 2. Run Development Server
 
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-3. Production Build
-
-Build for production:
+### 3. Production Build
 
 ```bash
 npm run build
@@ -73,101 +75,37 @@ npm run start
 
 ---
 
-📁 Directory Structure
+## 📁 Directory Structure
 
 ```text
 frontend/
-├── app/                      # Next.js App Router pages
-│   ├── change-password/      # First-login password change page
-│   ├── dashboard/            # Protected Dashboard & sub-routes
-│   │   ├── analytics/        # Business analytics
-│   │   ├── attendance/       # Attendance logs
-│   │   ├── chat/             # Messaging platform
-│   │   ├── departments/      # Department management
-│   │   ├── employees/        # Employee directory
-│   │   ├── meetings/         # Scheduling
-│   │   ├── reports/          # PDF & Excel Report Exports
-│   │   ├── settings/         # User & System settings
-│   │   └── tasks/            # Task board
+├── app/
+│   ├── change-password/      # Mandatory first-login password update page
+│   ├── dashboard/            # Protected Dashboard routes
+│   │   ├── attendance/       # Attendance tracking & admin custom punch modal
+│   │   ├── chat/             # Real-time messaging platform
+│   │   ├── departments/      # Department overview
+│   │   ├── employees/        # Staff directory & generated credentials modal
+│   │   ├── meetings/         # Team meeting scheduler
+│   │   ├── notifications/    # Live notification center
+│   │   ├── reports/          # Employee ID Credentials download & PDF/Excel exports
+│   │   ├── settings/         # Profile & Security settings
+│   │   ├── signout/          # Logout handler
+│   │   ├── tasks/            # Task board
+│   │   ├── layout.tsx        # Dashboard layout with Sidebar & Header
+│   │   └── page.tsx          # Real-time stats & greeting dashboard
 │   ├── login/                # Authentication page
-│   ├── register/             # User registration page
-│   └── page.tsx              # Portal landing & sign-in page
-├── components/               # Reusable UI & Layout components
-│   ├── ProtectedRoute.tsx    # Auth Guard component
-│   └── Sidebar.tsx           # Navigation sidebar
-├── contexts/                 # React Context providers (AuthContext)
-├── lib/                      # Utilities & Report Generators (reportGenerator.ts)
-├── public/                   # Static assets (logo.png)
-└── services/                 # API & Auth services (axios.config.ts, auth.service.ts)
+│   ├── register/             # Account registration page
+│   └── page.tsx              # Portal landing page
+├── components/               # UI components & Sidebar
+├── contexts/                 # AuthContext & SocketContext providers
+├── lib/                      # Report PDF & Excel export generators
+├── public/                   # Assets (EMS.png logo)
+└── services/                 # Axios configuration & API service layers
 ```
 
 ---
 
-🔒 Security & Best Practices
+## 📄 License
 
-· Automatic token refresh & session cleanup on 401 Unauthorized status.
-· Environment variable configuration for seamless local and production deployment.
-· Client-side route protection using <ProtectedRoute>.
-
----
-
-📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (git checkout -b feature/AmazingFeature)
-3. Commit your changes (git commit -m 'Add some AmazingFeature')
-4. Push to the branch (git push origin feature/AmazingFeature)
-5. Open a Pull Request
-
----
-
-📞 Contact
-
-PJSOFONIC ERP Team
-
-· Website: www.pjsofonic.com
-· Email: support@pjsofonic.com
-
----
-
-🙏 Acknowledgments
-
-· Next.js team for the amazing framework
-· All open-source contributors whose libraries make this project possible
-· Our dedicated development and QA teams
-
----
-
-© 2026 PJSOFONIC ERP. All rights reserved.
-
----
-
-MIT License
-
-Copyright (c) 2026 PJSOFONIC ERP
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Copyright (c) 2026 **PJSOFONIC EMS**. All rights reserved.
