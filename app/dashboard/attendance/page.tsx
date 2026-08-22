@@ -31,7 +31,7 @@ interface Employee {
   employeeId: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://erp-backend-1-02lc.onrender.com/api';
 
 function AttendanceContent() {
   const { accessToken, isAuthenticated, isLoading, user } = useAuth();

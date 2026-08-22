@@ -44,7 +44,7 @@ interface CredentialRow {
   tempPassword: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://erp-backend-1-02lc.onrender.com/api';
 
 type Tab = 'attendance' | 'employees' | 'credentials';
 

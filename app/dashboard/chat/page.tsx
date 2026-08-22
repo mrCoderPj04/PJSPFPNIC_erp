@@ -32,8 +32,8 @@ interface DirectoryUser {
   status: string;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://erp-backend-1-02lc.onrender.com/api';
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'https://erp-backend-1-02lc.onrender.com';
 
 function ChatContent() {
   const { accessToken, isAuthenticated, isLoading, user } = useAuth();
