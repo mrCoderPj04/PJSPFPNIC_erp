@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: pjspfpnic-erp
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: https://erp-backend-1-02lc.onrender.com/api
+      - key: NEXT_PUBLIC_SOCKET_URL
+        value: https://erp-backend-1-02lc.onrender.com
